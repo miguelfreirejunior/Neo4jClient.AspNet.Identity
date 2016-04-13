@@ -40,12 +40,15 @@ namespace Neo4jClient.AspNet.Identity
     /// Represents a user in the identity system
     /// </summary>
     /// <typeparam name="TKey">The type used for the primary key for the user.</typeparam>
-    public class IdentityUser<TKey> where TKey : IEquatable<TKey>
+    public class IdentityUser<TKey> : LabeledEntity where TKey : IEquatable<TKey>
     {
         /// <summary>
         /// Initializes a new instance of <see cref="IdentityUser{TKey}"/>.
         /// </summary>
-        public IdentityUser() { }
+        public IdentityUser()
+        {
+            this.Labels.Add("User");
+        }
 
         /// <summary>
         /// Initializes a new instance of <see cref="IdentityUser{TKey}"/>.
@@ -142,19 +145,19 @@ namespace Neo4jClient.AspNet.Identity
         /// Navigation property for the roles this user belongs to.
         /// </summary>
         [JsonIgnore]
-        public virtual ICollection<IdentityUserRole<TKey>> Roles { get; } = new List<IdentityUserRole<TKey>>();
+        public virtual ICollection<IdentityRole<TKey>> Roles { get; } = new List<IdentityRole<TKey>>();
 
         /// <summary>
         /// Navigation property for the claims this user possesses.
         /// </summary>
         [JsonIgnore]
-        public virtual ICollection<IdentityUserClaim<TKey>> Claims { get; } = new List<IdentityUserClaim<TKey>>();
+        public virtual ICollection<IdentityClaim<TKey>> Claims { get; } = new List<IdentityClaim<TKey>>();
 
         /// <summary>
         /// Navigation property for this users login accounts.
         /// </summary>
         [JsonIgnore]
-        public virtual ICollection<IdentityUserLogin<TKey>> Logins { get; } = new List<IdentityUserLogin<TKey>>();
+        public virtual ICollection<IdentityLogin<TKey>> Logins { get; } = new List<IdentityLogin<TKey>>();
 
         /// <summary>
         /// Returns the username for this user.

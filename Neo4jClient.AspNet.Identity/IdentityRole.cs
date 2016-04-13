@@ -40,12 +40,15 @@ namespace Neo4jClient.AspNet.Identity
     /// Represents a role in the identity system
     /// </summary>
     /// <typeparam name="TKey">The type used for the primary key for the role.</typeparam>
-    public class IdentityRole<TKey> where TKey : IEquatable<TKey>
+    public class IdentityRole<TKey> : LabeledEntity where TKey : IEquatable<TKey>
     {
         /// <summary>
         /// Initializes a new instance of <see cref="IdentityRole{TKey}"/>.
         /// </summary>
-        public IdentityRole() { }
+        public IdentityRole()
+        {
+            this.Labels.Add("Role");
+        }
 
         /// <summary>
         /// Initializes a new instance of <see cref="IdentityRole{TKey}"/>.
@@ -60,13 +63,13 @@ namespace Neo4jClient.AspNet.Identity
         /// Navigation property for the users in this role.
         /// </summary>
         [JsonIgnore]
-        public virtual ICollection<IdentityUserRole<TKey>> Users { get; } = new List<IdentityUserRole<TKey>>();
+        public virtual ICollection<IdentityUser<TKey>> Users { get; } = new List<IdentityUser<TKey>>();
 
         /// <summary>
         /// Navigation property for claims in this role.
         /// </summary>
         [JsonIgnore]
-        public virtual ICollection<IdentityRoleClaim<TKey>> Claims { get; } = new List<IdentityRoleClaim<TKey>>();
+        public virtual ICollection<IdentityClaim<TKey>> Claims { get; } = new List<IdentityClaim<TKey>>();
 
         /// <summary>
         /// Gets or sets the primary key for this role.

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading;
@@ -56,10 +57,14 @@ namespace Neo4jClient.AspNet.Identity
             ThrowIfDisposed();
             Check.IsNull(role, nameof(role));
 
-            await this._graphClient.Cypher
-                .Create("(r:Role { role }")
+            var results = await this._graphClient.Cypher
                 .WithParam("role", role)
-                .ExecuteWithoutResultsAsync();
+                .Create($"(r{role.FormattedLabel} {{ role }})")
+                .Set("r.TimeStamp = timestamp()")
+                .Return((r) => r.As<TRole>().TimeStamp)
+                .ResultsAsync;
+
+            role.TimeStamp = results.First();
 
             return IdentityResult.Success;
         }
@@ -74,22 +79,25 @@ namespace Neo4jClient.AspNet.Identity
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
+            Check.IsNull(role, nameof(role));
+
+            var results = await this._graphClient.Cypher
+                .WithParams(new { role, role.TimeStamp })
+                .Match($"(r{role.FormattedLabel} {{ Id: role.Id, TimeStamp: TimeStamp }})")
+                .Set("r = role")
+                .Set("r.TimeStamp = timestamp()")
+                .Return((r) => r.As<TRole>().TimeStamp)
+                .ResultsAsync;
+
+            if (results.Any())
             {
-                throw new ArgumentNullException(nameof(role));
+                role.TimeStamp = results.First();
+                return IdentityResult.Success;
             }
-            Context.Attach(role);
-            role.ConcurrencyStamp = Guid.NewGuid().ToString();
-            Context.Update(role);
-            try
-            {
-                await SaveChanges(cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException)
+            else
             {
                 return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
             }
-            return IdentityResult.Success;
         }
 
         /// <summary>
@@ -102,20 +110,22 @@ namespace Neo4jClient.AspNet.Identity
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
+            Check.IsNull(role, nameof(role));
+
+            var results = await this._graphClient.Cypher
+                .Match($"(r{role.FormattedLabel}")
+                .Where((TRole r) => r.Id.Equals(role.Id))
+                .AndWhere((TRole r) => r.TimeStamp == role.TimeStamp)
+                .Delete("r")
+                .Return<long>("count(r)")
+                .ResultsAsync;
+
+            if (results.All(r => r > 0))
             {
-                throw new ArgumentNullException(nameof(role));
+                return IdentityResult.Success;
             }
-            Context.Remove(role);
-            try
-            {
-                await SaveChanges(cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
-            }
-            return IdentityResult.Success;
+
+            return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
         }
 
         /// <summary>
@@ -128,10 +138,8 @@ namespace Neo4jClient.AspNet.Identity
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
+            Check.IsNull(role, nameof(role));
+
             return Task.FromResult(ConvertIdToString(role.Id));
         }
 
@@ -145,10 +153,8 @@ namespace Neo4jClient.AspNet.Identity
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
+            Check.IsNull(role, nameof(role));
+
             return Task.FromResult(role.Name);
         }
 
@@ -163,10 +169,8 @@ namespace Neo4jClient.AspNet.Identity
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
+            Check.IsNull(role, nameof(role));
+
             role.Name = roleName;
             return Task.FromResult(0);
         }
@@ -182,6 +186,7 @@ namespace Neo4jClient.AspNet.Identity
             {
                 return default(TKey);
             }
+
             return (TKey)TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(id);
         }
 
@@ -196,6 +201,7 @@ namespace Neo4jClient.AspNet.Identity
             {
                 return null;
             }
+
             return id.ToString();
         }
 
@@ -205,12 +211,19 @@ namespace Neo4jClient.AspNet.Identity
         /// <param name="roleId">The role ID to look for.</param>
         /// <param name="cancellationToken">The <see cref="CancellationToken"/> used to propagate notifications that the operation should be canceled.</param>
         /// <returns>A <see cref="Task{TResult}"/> that result of the look up.</returns>
-        public virtual Task<TRole> FindByIdAsync(string id, CancellationToken cancellationToken = default(CancellationToken))
+        public virtual async Task<TRole> FindByIdAsync(string id, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             var roleId = ConvertIdFromString(id);
-            return Roles.FirstOrDefaultAsync(u => u.Id.Equals(roleId), cancellationToken);
+
+            var results = await this._graphClient.Cypher
+                .Match($"(r{LabeledEntity.LabelsFor<IdentityRole>()})")
+                .Where<TRole>(r => r.Id.Equals(roleId))
+                .Return<TRole>("r")
+                .ResultsAsync;
+
+            return results.FirstOrDefault();
         }
 
         /// <summary>
@@ -219,11 +232,18 @@ namespace Neo4jClient.AspNet.Identity
         /// <param name="normalizedRoleName">The normalized role name to look for.</param>
         /// <param name="cancellationToken">The <see cref="CancellationToken"/> used to propagate notifications that the operation should be canceled.</param>
         /// <returns>A <see cref="Task{TResult}"/> that result of the look up.</returns>
-        public virtual Task<TRole> FindByNameAsync(string normalizedName, CancellationToken cancellationToken = default(CancellationToken))
+        public virtual async Task<TRole> FindByNameAsync(string normalizedName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            return Roles.FirstOrDefaultAsync(r => r.NormalizedName == normalizedName, cancellationToken);
+
+            var results = await this._graphClient.Cypher
+                .Match($"(r{LabeledEntity.LabelsFor<IdentityRole>()})")
+                .Where<TRole>(r => r.NormalizedName == normalizedName)
+                .Return<TRole>("r")
+                .ResultsAsync;
+
+            return results.FirstOrDefault();
         }
 
         /// <summary>
@@ -236,10 +256,8 @@ namespace Neo4jClient.AspNet.Identity
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
+            Check.IsNull(role, nameof(role));
+
             return Task.FromResult(role.NormalizedName);
         }
 
@@ -254,10 +272,8 @@ namespace Neo4jClient.AspNet.Identity
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
+            Check.IsNull(role, nameof(role));
+
             role.NormalizedName = normalizedName;
             return Task.FromResult(0);
         }
@@ -287,12 +303,14 @@ namespace Neo4jClient.AspNet.Identity
         public async Task<IList<Claim>> GetClaimsAsync(TRole role, CancellationToken cancellationToken = default(CancellationToken))
         {
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
+            Check.IsNull(role, nameof(role));
 
-            return await RoleClaims.Where(rc => rc.RoleId.Equals(role.Id)).Select(c => new Claim(c.ClaimType, c.ClaimValue)).ToListAsync(cancellationToken);
+            var results = await this._graphClient.Cypher
+                .Match($"(r:{role.FormattedLabel})-[:HAS_CLAIM]->(c)")
+                .Return<IdentityClaim<TKey>>("c")
+                .ResultsAsync;
+
+            return results.Select(c => c.ToClaim()).ToList();
         }
 
         /// <summary>
@@ -305,14 +323,8 @@ namespace Neo4jClient.AspNet.Identity
         public Task AddClaimAsync(TRole role, Claim claim, CancellationToken cancellationToken = default(CancellationToken))
         {
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
-            if (claim == null)
-            {
-                throw new ArgumentNullException(nameof(claim));
-            }
+            Check.IsNull(role, nameof(role));
+            Check.IsNull(claim, nameof(claim));
 
             RoleClaims.Add(new IdentityRoleClaim<TKey> { RoleId = role.Id, ClaimType = claim.Type, ClaimValue = claim.Value });
 
