@@ -1,0 +1,123 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Neo4jClient.AspNet.Identity</name>
+    </assembly>
+    <members>
+        <member name="T:Neo4jClient.AspNet.Identity.IdentityUser">
+            <summary>
+            The default implementation of <see cref="T:Neo4jClient.AspNet.Identity.IdentityUser`1"/> which uses a string as a primary key.
+            </summary>
+        </member>
+        <member name="M:Neo4jClient.AspNet.Identity.IdentityUser.#ctor">
+            <summary>
+            Initializes a new instance of <see cref="T:Neo4jClient.AspNet.Identity.IdentityUser"/>.
+            </summary>
+            <remarks>
+            The Id property is initialized to from a new GUID string value.
+            </remarks>
+        </member>
+        <member name="M:Neo4jClient.AspNet.Identity.IdentityUser.#ctor(System.String)">
+            <summary>
+            Initializes a new instance of <see cref="T:Neo4jClient.AspNet.Identity.IdentityUser"/>.
+            </summary>
+            <param name="userName">The user name.</param>
+            <remarks>
+            The Id property is initialized to from a new GUID string value.
+            </remarks>
+        </member>
+        <member name="T:Neo4jClient.AspNet.Identity.IdentityUser`1">
+            <summary>
+            Represents a user in the identity system
+            </summary>
+            <typeparam name="TKey">The type used for the primary key for the user.</typeparam>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUser`1.NormalizedEmail">
+            <summary>
+            Gets or sets the normalized email address for this user.
+            </summary>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUser`1.TwoFactorEnabled">
+            <summary>
+            Gets or sets a flag indicating if two factor authentication is enabled for this user.
+            </summary>
+            <value>True if 2fa is enabled, otherwise false.</value>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUser`1.LockoutEnd">
+            <summary>
+            Gets or sets the date and time, in UTC, when any user lockout ends.
+            </summary>
+            <remarks>
+            A value in the past means the user is not locked out.
+            </remarks>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUser`1.LockoutEnabled">
+            <summary>
+            Gets or sets a flag indicating if this user is locked out.
+            </summary>
+            <value>True if the user is locked out, otherwise false.</value>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUser`1.EmailConfirmed">
+            <summary>
+            Gets or sets a flag indicating if a user has confirmed their email address.
+            </summary>
+            <value>True if the email address has been confirmed, otherwise false.</value>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUser`1.AccessFailedCount">
+            <summary>
+            Gets or sets the number of failed login attempts for the current user.
+            </summary>
+        </member>
+        <member name="T:Neo4jClient.AspNet.Identity.IdentityUserClaim">
+            <summary>
+            Represents a claim that a user possesses. 
+            </summary>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUserClaim.Id">
+            <summary>
+            Gets or sets the identifier for this user claim.
+            </summary>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUserClaim.ClaimType">
+            <summary>
+            Gets or sets the claim type for this claim.
+            </summary>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.IdentityUserClaim.ClaimValue">
+            <summary>
+            Gets or sets the claim value for this claim.
+            </summary>
+        </member>
+        <member name="M:Neo4jClient.AspNet.Identity.Neo4jUserStore`1.AddLoginAsync(`0,Microsoft.AspNet.Identity.UserLoginInfo,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="M:Neo4jClient.AspNet.Identity.Neo4jUserStore`1.RemoveLoginAsync(`0,System.String,System.String,System.Threading.CancellationToken)">
+            <inheritdoc />
+        </member>
+        <member name="T:Neo4jClient.AspNet.Identity.Helpers.Check">
+            <summary>
+                Static helper class to throw a new <see cref="T:System.Exception" />.
+            </summary>
+        </member>
+        <member name="M:Neo4jClient.AspNet.Identity.Helpers.Check.IsNull``1(``0,System.String)">
+            <summary>Throws an <see cref="T:System.ArgumentException" /> if the <paramref name="obj" /> given is <c>null</c>.</summary>
+            <typeparam name="T">Must be a class.</typeparam>
+            <param name="obj">The object to check.</param>
+            <param name="parameterName">The name of the parameter the <paramref name="obj" /> was in.</param>
+            <exception cref="T:System.ArgumentException">Thrown if the <paramref name="obj" /> given is <c>null</c>.</exception>
+        </member>
+        <member name="M:Neo4jClient.AspNet.Identity.Helpers.Check.IsNullOrEmpty``1(``0,System.String)">
+            <summary>Throws an <see cref="T:System.ArgumentException" /> if the <paramref name="obj" /> given is <c>Empty</c>.</summary>
+            <typeparam name="T">Must be a <see cref="T:System.Collections.IEnumerable"/>.</typeparam>
+            <param name="obj">The object to check.</param>
+            <param name="parameterName">The name of the parameter the <paramref name="obj" /> was in.</param>
+            <exception cref="T:System.ArgumentException">Thrown if the <paramref name="obj" /> given is <c>null</c>.</exception>
+        </member>
+        <member name="M:Neo4jClient.AspNet.Identity.Helpers.Check.IsNullOrWhiteSpace(System.String,System.String)">
+            <summary>Throws an <see cref="T:System.ArgumentException" /> if the <paramref name="s" /> given is <c>null</c> or whitespace.</summary>
+            <param name="s">The string to check.</param>
+            <param name="parameterName">The name of the parameter the <paramref name="s" /> was in.</param>
+            <exception cref="T:System.ArgumentException">Thrown if the <paramref name="s" /> given is <c>null</c> or whitespace.</exception>
+        </member>
+    </members>
+</doc>
