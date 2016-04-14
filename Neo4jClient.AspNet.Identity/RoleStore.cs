@@ -59,7 +59,7 @@ namespace Neo4jClient.AspNet.Identity
 
             var results = await this._graphClient.Cypher
                 .WithParam("role", role)
-                .Create($"(r{role.FormattedLabel} {{ role }})")
+                .Create($"(r:{role.Labels} {{ role }})")
                 .Set("r.TimeStamp = timestamp()")
                 .Return((r) => r.As<TRole>().TimeStamp)
                 .ResultsAsync;
@@ -83,7 +83,7 @@ namespace Neo4jClient.AspNet.Identity
 
             var results = await this._graphClient.Cypher
                 .WithParams(new { role, role.TimeStamp })
-                .Match($"(r{role.FormattedLabel} {{ Id: role.Id, TimeStamp: TimeStamp }})")
+                .Match($"(r:{role.Labels} {{ Id: role.Id, TimeStamp: TimeStamp }})")
                 .Set("r = role")
                 .Set("r.TimeStamp = timestamp()")
                 .Return((r) => r.As<TRole>().TimeStamp)
@@ -113,7 +113,7 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(role, nameof(role));
 
             var results = await this._graphClient.Cypher
-                .Match($"(r{role.FormattedLabel}")
+                .Match($"(r:{role.Labels}")
                 .Where((TRole r) => r.Id.Equals(role.Id))
                 .AndWhere((TRole r) => r.TimeStamp == role.TimeStamp)
                 .Delete("r")
@@ -218,7 +218,7 @@ namespace Neo4jClient.AspNet.Identity
             var roleId = ConvertIdFromString(id);
 
             var results = await this._graphClient.Cypher
-                .Match($"(r{LabeledEntity.LabelsFor<IdentityRole>()})")
+                .Match($"(r:{typeof(TRole).Labels()})")
                 .Where<TRole>(r => r.Id.Equals(roleId))
                 .Return<TRole>("r")
                 .ResultsAsync;
@@ -238,7 +238,7 @@ namespace Neo4jClient.AspNet.Identity
             ThrowIfDisposed();
 
             var results = await this._graphClient.Cypher
-                .Match($"(r{LabeledEntity.LabelsFor<IdentityRole>()})")
+                .Match($"(r{typeof(TRole).Labels()})")
                 .Where<TRole>(r => r.NormalizedName == normalizedName)
                 .Return<TRole>("r")
                 .ResultsAsync;
@@ -302,11 +302,12 @@ namespace Neo4jClient.AspNet.Identity
         /// <returns>A <see cref="Task{TResult}"/> that contains the claims granted to a role.</returns>
         public async Task<IList<Claim>> GetClaimsAsync(TRole role, CancellationToken cancellationToken = default(CancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(role, nameof(role));
 
             var results = await this._graphClient.Cypher
-                .Match($"(r:{role.FormattedLabel})-[:HAS_CLAIM]->(c)")
+                .Match($"(r:{role.Labels})-[:HAS_CLAIM]->(c)")
                 .Return<IdentityClaim<TKey>>("c")
                 .ResultsAsync;
 
@@ -322,11 +323,19 @@ namespace Neo4jClient.AspNet.Identity
         /// <returns>The <see cref="Task"/> that represents the asynchronous operation.</returns>
         public Task AddClaimAsync(TRole role, Claim claim, CancellationToken cancellationToken = default(CancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(role, nameof(role));
             Check.IsNull(claim, nameof(claim));
 
-            RoleClaims.Add(new IdentityRoleClaim<TKey> { RoleId = role.Id, ClaimType = claim.Type, ClaimValue = claim.Value });
+            var iClaim = new IdentityClaim(claim);
+
+            this._graphClient.Cypher
+                .WithParam("claim", iClaim)
+                .Match($"(r:{role.Labels})")
+                .Where((TRole r) => r.Id.Equals(role.Id))
+                .Create($"(r)-[HAS_CLAIM]->(c:{iClaim.Labels} {{ claim }})")
+                .ExecuteWithoutResults();
 
             return Task.FromResult(false);
         }
@@ -338,22 +347,23 @@ namespace Neo4jClient.AspNet.Identity
         /// <param name="claim">The claim to remove from the role.</param>
         /// <param name="cancellationToken">The <see cref="CancellationToken"/> used to propagate notifications that the operation should be canceled.</param>
         /// <returns>The <see cref="Task"/> that represents the asynchronous operation.</returns>
-        public async Task RemoveClaimAsync(TRole role, Claim claim, CancellationToken cancellationToken = default(CancellationToken))
+        public Task RemoveClaimAsync(TRole role, Claim claim, CancellationToken cancellationToken = default(CancellationToken))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            if (role == null)
-            {
-                throw new ArgumentNullException(nameof(role));
-            }
-            if (claim == null)
-            {
-                throw new ArgumentNullException(nameof(claim));
-            }
-            var claims = await RoleClaims.Where(rc => rc.RoleId.Equals(role.Id) && rc.ClaimValue == claim.Value && rc.ClaimType == claim.Type).ToListAsync(cancellationToken);
-            foreach (var c in claims)
-            {
-                RoleClaims.Remove(c);
-            }
+            Check.IsNull(role, nameof(role));
+            Check.IsNull(claim, nameof(claim));
+
+            this._graphClient.Cypher
+                .Match($"(r:{role.Labels})-[rel:HAS_CLAIM]->(c:{typeof(IdentityClaim).Labels()})")
+                .Where((TRole r) => r.Id.Equals(role.Id))
+                .Where((TRole r) => r.TimeStamp == role.TimeStamp)
+                .AndWhere((IdentityClaim c) => c.ClaimType == claim.Type)
+                .AndWhere((IdentityClaim c) => c.ClaimValue == claim.Value)
+                .Delete("rel,c")
+                .ExecuteWithoutResults();
+
+            return Task.FromResult(0);
         }
 
         /// <summary>
@@ -361,7 +371,13 @@ namespace Neo4jClient.AspNet.Identity
         /// </summary>
         public virtual IQueryable<TRole> Roles
         {
-            get { return Context.Set<TRole>(); }
+            get
+            {
+                return this._graphClient.Cypher
+                    .Match($"(r:{typeof(TRole).Labels()})")
+                    .Return<TRole>("r")
+                    .Results.AsQueryable();
+            }
         }
     }
 }

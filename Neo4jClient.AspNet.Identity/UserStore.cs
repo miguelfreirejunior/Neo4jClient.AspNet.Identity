@@ -11,7 +11,7 @@ namespace Neo4jClient.AspNet.Identity
     using Neo4jClient;
     using Neo4jClient.Cypher;
 
-    public class UserStore<TUser> :
+    public class UserStore<TUser, TKey> :
         IUserLoginStore<TUser>,
         IUserClaimStore<TUser>,
         IUserRoleStore<TUser>,
@@ -22,7 +22,8 @@ namespace Neo4jClient.AspNet.Identity
         IUserTwoFactorStore<TUser>,
         IUserPhoneNumberStore<TUser>,
         IUserStore<TUser>
-        where TUser : IdentityUser, new()
+        where TKey : IEquatable<TKey>
+        where TUser : IdentityUser<TKey>, new()
     {
         private bool _disposed;
         private readonly IGraphClient _graphClient;
@@ -38,29 +39,6 @@ namespace Neo4jClient.AspNet.Identity
                 throw new ObjectDisposedException(GetType().Name);
         }
 
-        #region Internal Classes for Serialization
-
-        internal class FindUserResult<T>
-            where T : IdentityUser, new()
-        {
-            public T User { private get; set; }
-            public IEnumerable<UserLoginInfo> Logins { private get; set; }
-            public IEnumerable<IdentityUserClaim> Claims { private get; set; }
-
-            public T Combine()
-            {
-                var output = User;
-                if (Logins != null)
-                    output.Logins = this.Logins.ToList();
-                if (Claims != null)
-                    output.Claims = this.Claims.ToList();
-
-                return output;
-            }
-        }
-
-        #endregion Internal Classes for Serialization
-
         #region IUserLoginStore
 
         /// <inheritdoc />
@@ -71,8 +49,10 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(user, "user");
             Check.IsNull(login, "login");
 
+            var iLogin = new IdentityLogin<TKey>(login);
+
             await this._graphClient.Cypher
-                .Create("(u:User { Id: id})-[:HAS_LOGIN]->(l:Login { login })")
+                .Create($"(u:{user.Labels} {{ Id: id }})-[:HAS_LOGIN]->(l:{iLogin.Labels} {{ login }})")
                 .WithParam("login", login)
                 .WithParam("id", user.Id)
                 .ExecuteWithoutResultsAsync();
@@ -88,9 +68,9 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(providerKey, "providerKey");
 
             await this._graphClient.Cypher
-                .OptionalMatch("(u:User { Id: id})-[:HAS_LOGIN]->(l:Login)")
-                .Where((UserLoginInfo l) => l.LoginProvider == loginProvider)
-                .AndWhere((UserLoginInfo l) => l.ProviderKey == providerKey)
+                .OptionalMatch($"(u:{user.Labels} {{ Id: id }})-[:HAS_LOGIN]->(l:{typeof(IdentityLogin).Labels()})")
+                .Where((IdentityLogin l) => l.LoginProvider == loginProvider)
+                .AndWhere((IdentityLogin l) => l.ProviderKey == providerKey)
                 .WithParam("id", user.Id)
                 .Delete("l")
                 .ExecuteWithoutResultsAsync();
@@ -103,12 +83,12 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(user, "user");
 
             var results = await this._graphClient.Cypher
-                .OptionalMatch("(u:User { Id: id})-[:HAS_LOGIN]->(l:Login)")
+                .OptionalMatch($"(u:{user.Labels} {{ Id: id }})-[:HAS_LOGIN]->(l:{typeof(IdentityLogin).Labels()})")
                 .WithParam("id", user.Id)
-                .Return<UserLoginInfo>("l")
+                .Return<IdentityLogin<TKey>>("l")
                 .ResultsAsync;
 
-            return results.ToList();
+            return results.Select(l => l.ToUserLoginInfo()).ToList();
         }
 
         public async Task<TUser> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
@@ -121,22 +101,24 @@ namespace Neo4jClient.AspNet.Identity
             providerKey = providerKey.ToLowerInvariant().Trim();
 
             var results = await _graphClient.Cypher
-                .Match("(l:Login)<-[:HAS_LOGIN]-(u:User)")
+                .Match($"(l:{typeof(IdentityLogin).Labels()})<-[:HAS_LOGIN]-(u:{typeof(TUser).Labels()})")
                 .Where((UserLoginInfo l) => l.ProviderKey == providerKey)
                 .AndWhere((UserLoginInfo l) => l.LoginProvider == loginProvider)
-                .OptionalMatch("(u)-[:HAS_CLAIM]->(c:Claim)")
-                .Return((u, c, l) => new FindUserResult<TUser>
+                .OptionalMatch("(u)-[:HAS_CLAIM]->(c)")
+                .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
+                .Return((u, c, l, r) => new
                 {
                     User = u.As<TUser>(),
-                    Logins = l.CollectAs<UserLoginInfo>(),
-                    Claims = c.CollectAs<IdentityUserClaim>()
+                    Logins = l.CollectAs<IdentityLogin<TKey>>().ToList(),
+                    Claims = c.CollectAs<IdentityClaim<TKey>>().ToList(),
+                    Roles = r.CollectAs<IdentityRole<TKey>>().ToList()
                 }).ResultsAsync;
 
-            var findUserResult = results.SingleOrDefault();
-            return findUserResult == null ? null : findUserResult.Combine();
+            var result = results.SingleOrDefault();
+            return result.User.Fill(result.Roles, result.Claims, result.Logins);
         }
 
-        public async Task<string> GetUserIdAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<TKey> GetUserIdAsync(TUser user, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -190,13 +172,9 @@ namespace Neo4jClient.AspNet.Identity
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
+            Check.IsIdNull<TUser, TKey>(user, "user");
 
-            if (string.IsNullOrWhiteSpace(user.Id))
-            {
-                user.Id = Guid.NewGuid().ToString();
-            }
-
-            var query = _graphClient.Cypher.Create("(u:User { user })")
+            var query = _graphClient.Cypher.Create($"(u:{user.Labels} {{ user }})")
                 .WithParams(new { user });
 
             await query.ExecuteWithoutResultsAsync();
@@ -210,15 +188,9 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(user, "user");
 
             var query = new CypherFluentQuery(_graphClient)
-                .Match("(u:User { Id: userParam.Id })")
+                .Match($"(u:{user.Labels} {{ Id: userParam.Id }})")
                 .Set("u = {userParam}")
                 .WithParam("userParam", user);
-            ////.With("u").OptionalMatch("(u)-[cr:HAS_CLAIM]->(c:Claim)").Delete("c,cr")
-            ////.With("u").OptionalMatch("(u)-[lr:HAS_LOGIN]->(l:Login)").Delete("l,lr")
-            ////.With("u").OptionalMatch("(u)-[rl:IN_ROLE]->(r:Role)").Delete("rl");
-
-            ////query = AddClaims(query, user.Claims);
-            ////query = AddLogins(query, user.Logins);
 
             await query.ExecuteWithoutResultsAsync();
             return IdentityResult.Success;

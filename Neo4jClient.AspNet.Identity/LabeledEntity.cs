@@ -2,34 +2,17 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Neo4jClient.AspNet.Identity.Helpers;
 using Newtonsoft.Json;
 
 namespace Neo4jClient.AspNet.Identity
 {
-    public class LabeledEntity
+    public class LabeledEntity<TKey> where TKey : IEquatable<TKey>
     {
-        private static IDictionary<Type, string> LABELS = new Dictionary<Type, string>();
-
         /// <summary>
-        /// Auxiliar method to access the Neo4j Labels per class
+        /// Gets or sets the primary key for this entity
         /// </summary>
-        /// <typeparam name="T">Class to recover labels</typeparam>
-        /// <returns>Labels</returns>
-        public static string LabelsFor<T>() where T : LabeledEntity, new()
-        {
-            if (!LABELS.ContainsKey(typeof(T)))
-            {
-                LABELS.Add(typeof(T), new T().FormattedLabel);
-            }
-
-            return LABELS[typeof(T)];
-        }
-
-
-        /// <summary>
-        /// Define the class labels for Neo4j
-        /// </summary>
-        public ICollection<string> Labels { get; } = new List<string>();
+        public virtual TKey Id { get; set; }
 
         /// <summary>
         /// Optimistic concurrency flag
@@ -45,13 +28,14 @@ namespace Neo4jClient.AspNet.Identity
         /// <summary>
         /// A formatted string that represents this entity, ex: ":Entity:Nullable"
         /// </summary>
-        public string FormattedLabel
+        public string Labels
         {
             get
             {
-                if (this.Labels.Any())
+                var retorno = this.GetType().Labels();
+                if (!string.IsNullOrWhiteSpace(retorno))
                 {
-                    return $":{string.Join(":", this.Labels)}";
+                    return retorno;
                 }
 
                 throw new ArgumentException($"No labels defined for entity {this.GetType().Name}");

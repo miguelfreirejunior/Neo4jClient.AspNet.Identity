@@ -19,6 +19,19 @@ namespace Neo4jClient.AspNet.Identity.Helpers
             If(obj, parameterName, t => t == null, string.Format("{0} can't be null", parameterName));
         }
 
+        /// <summary>Throws an <see cref="System.ArgumentException" /> if the <c>Id</c> property in <paramref name="obj" /> is <c>null</c>.</summary>
+        /// <typeparam name="T">Must be a class.</typeparam>
+        /// <param name="obj">The object to check.</param>
+        /// <param name="parameterName">The name of the parameter the <paramref name="obj" /> was in.</param>
+        /// <param name="optionalTest">Optionally an adittional test can be passed</param>
+        /// <exception cref="System.ArgumentException">Thrown if the <paramref name="obj" /> given is <c>null</c>.</exception>
+        public static void IsIdNull<T, TKey>(T obj, string parameterName) 
+            where T : LabeledEntity<TKey>
+            where TKey : IEquatable<TKey>
+        {
+            If(obj, parameterName, t => t.Id == null, string.Format("Property 'Id' from {0} can't be null", parameterName));
+        }
+
         /// <summary>Throws an <see cref="System.ArgumentException" /> if the <paramref name="obj" /> given is <c>Empty</c>.</summary>
         /// <typeparam name="T">Must be a <see cref="IEnumerable"/>.</typeparam>
         /// <param name="obj">The object to check.</param>

@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using Neo4jClient.AspNet.Identity.Helpers;
 using Newtonsoft.Json;
 
 namespace Neo4jClient.AspNet.Identity
@@ -40,14 +41,14 @@ namespace Neo4jClient.AspNet.Identity
     /// Represents a role in the identity system
     /// </summary>
     /// <typeparam name="TKey">The type used for the primary key for the role.</typeparam>
-    public class IdentityRole<TKey> : LabeledEntity where TKey : IEquatable<TKey>
+    [Neo4jLabel("Claim")]
+    public class IdentityRole<TKey> : LabeledEntity<TKey> where TKey : IEquatable<TKey>
     {
         /// <summary>
         /// Initializes a new instance of <see cref="IdentityRole{TKey}"/>.
         /// </summary>
         public IdentityRole()
         {
-            this.Labels.Add("Role");
         }
 
         /// <summary>
@@ -70,11 +71,6 @@ namespace Neo4jClient.AspNet.Identity
         /// </summary>
         [JsonIgnore]
         public virtual ICollection<IdentityClaim<TKey>> Claims { get; } = new List<IdentityClaim<TKey>>();
-
-        /// <summary>
-        /// Gets or sets the primary key for this role.
-        /// </summary>
-        public virtual TKey Id { get; set; }
 
         /// <summary>
         /// Gets or sets the name for this role.
