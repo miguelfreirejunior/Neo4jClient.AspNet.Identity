@@ -116,7 +116,8 @@ namespace Neo4jClient.AspNet.Identity
                 .Match($"(r:{role.Labels}")
                 .Where((TRole r) => r.Id.Equals(role.Id))
                 .AndWhere((TRole r) => r.TimeStamp == role.TimeStamp)
-                .Delete("r")
+                .OptionalMatch("(r)-[cr:HAS_CLAIM]->(c)")
+                .Delete("r,cr")
                 .Return<long>("count(r)")
                 .ResultsAsync;
 

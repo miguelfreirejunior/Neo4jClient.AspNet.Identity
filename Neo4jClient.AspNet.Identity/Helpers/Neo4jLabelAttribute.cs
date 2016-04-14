@@ -11,7 +11,9 @@ namespace Neo4jClient.AspNet.Identity.Helpers
         /// </summary>
         /// <typeparam name="T">Class to recover labels</typeparam>
         /// <returns>Labels</returns>
-        public static string LabelsFor<T>() where T : LabeledEntity, new()
+        public static string LabelsFor<T, TKey>()
+            where TKey : IEquatable<TKey>
+            where T : LabeledEntity<TKey>, new()
         {
             var labels = typeof(T).GetCustomAttributes(typeof(Neo4jLabelAttribute), true).Cast<Neo4jLabelAttribute>();
 

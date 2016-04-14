@@ -2,6 +2,7 @@ namespace Neo4jClient.AspNet.Identity
 {
     using System;
     using System.Collections.Generic;
+    using System.ComponentModel;
     using System.Linq;
     using System.Security.Claims;
     using System.Threading;
@@ -42,24 +43,24 @@ namespace Neo4jClient.AspNet.Identity
         #region IUserLoginStore
 
         /// <inheritdoc />
-        public async Task AddLoginAsync(TUser user, UserLoginInfo login, CancellationToken cancellationToken)
+        public async Task AddLoginAsync(TUser user, UserLoginInfo login, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
             Check.IsNull(login, "login");
 
-            var iLogin = new IdentityLogin<TKey>(login);
-
             await this._graphClient.Cypher
-                .Create($"(u:{user.Labels} {{ Id: id }})-[:HAS_LOGIN]->(l:{iLogin.Labels} {{ login }})")
-                .WithParam("login", login)
-                .WithParam("id", user.Id)
+                .Create($"(u:{user.Labels})-[:HAS_LOGIN]->(l)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .AndWhere((IdentityLogin<TKey> l) => l.LoginProvider == login.LoginProvider)
+                .AndWhere((IdentityLogin<TKey> l) => l.ProviderDisplayName == login.ProviderDisplayName)
+                .AndWhere((IdentityLogin<TKey> l) => l.ProviderKey == login.ProviderKey)
                 .ExecuteWithoutResultsAsync();
         }
 
         /// <inheritdoc />
-        public async Task RemoveLoginAsync(TUser user, string loginProvider, string providerKey, CancellationToken cancellationToken)
+        public async Task RemoveLoginAsync(TUser user, string loginProvider, string providerKey, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -68,30 +69,30 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(providerKey, "providerKey");
 
             await this._graphClient.Cypher
-                .OptionalMatch($"(u:{user.Labels} {{ Id: id }})-[:HAS_LOGIN]->(l:{typeof(IdentityLogin).Labels()})")
-                .Where((IdentityLogin l) => l.LoginProvider == loginProvider)
-                .AndWhere((IdentityLogin l) => l.ProviderKey == providerKey)
-                .WithParam("id", user.Id)
+                .OptionalMatch($"(u:{user.Labels})-[:HAS_LOGIN]->(l)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .Where((IdentityLogin<TKey> l) => l.LoginProvider == loginProvider)
+                .AndWhere((IdentityLogin<TKey> l) => l.ProviderKey == providerKey)
                 .Delete("l")
                 .ExecuteWithoutResultsAsync();
         }
 
-        public async Task<IList<UserLoginInfo>> GetLoginsAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<IList<UserLoginInfo>> GetLoginsAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
 
             var results = await this._graphClient.Cypher
-                .OptionalMatch($"(u:{user.Labels} {{ Id: id }})-[:HAS_LOGIN]->(l:{typeof(IdentityLogin).Labels()})")
-                .WithParam("id", user.Id)
+                .OptionalMatch($"(u:{user.Labels})-[:HAS_LOGIN]->(l)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
                 .Return<IdentityLogin<TKey>>("l")
                 .ResultsAsync;
 
             return results.Select(l => l.ToUserLoginInfo()).ToList();
         }
 
-        public async Task<TUser> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
+        public async Task<TUser> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -102,32 +103,29 @@ namespace Neo4jClient.AspNet.Identity
 
             var results = await _graphClient.Cypher
                 .Match($"(l:{typeof(IdentityLogin).Labels()})<-[:HAS_LOGIN]-(u:{typeof(TUser).Labels()})")
-                .Where((UserLoginInfo l) => l.ProviderKey == providerKey)
-                .AndWhere((UserLoginInfo l) => l.LoginProvider == loginProvider)
+                .Where((IdentityLogin<TKey> l) => l.ProviderKey == providerKey)
+                .AndWhere((IdentityLogin<TKey> l) => l.LoginProvider == loginProvider)
                 .OptionalMatch("(u)-[:HAS_CLAIM]->(c)")
                 .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
-                .Return((u, c, l, r) => new
-                {
-                    User = u.As<TUser>(),
-                    Logins = l.CollectAs<IdentityLogin<TKey>>().ToList(),
-                    Claims = c.CollectAs<IdentityClaim<TKey>>().ToList(),
-                    Roles = r.CollectAs<IdentityRole<TKey>>().ToList()
-                }).ResultsAsync;
+                .Return((u, c, l, r) =>
+                    u.As<TUser>().Fill(
+                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        c.CollectAs<IdentityClaim<TKey>>().ToList(),
+                        l.CollectAs<IdentityLogin<TKey>>().ToList())).ResultsAsync;
 
-            var result = results.SingleOrDefault();
-            return result.User.Fill(result.Roles, result.Claims, result.Logins);
+            return results.SingleOrDefault();
         }
 
-        public async Task<TKey> GetUserIdAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<string> GetUserIdAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
 
-            return await Task.FromResult(user.Id);
+            return await Task.FromResult(ConvertIdToString(user.Id));
         }
 
-        public async Task<string> GetUserNameAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<string> GetUserNameAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -136,7 +134,7 @@ namespace Neo4jClient.AspNet.Identity
             return await Task.FromResult(user.UserName);
         }
 
-        public async Task SetUserNameAsync(TUser user, string userName, CancellationToken cancellationToken)
+        public async Task SetUserNameAsync(TUser user, string userName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -147,7 +145,7 @@ namespace Neo4jClient.AspNet.Identity
             await Task.FromResult(0);
         }
 
-        public Task<string> GetNormalizedUserNameAsync(TUser user, CancellationToken cancellationToken)
+        public Task<string> GetNormalizedUserNameAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -156,7 +154,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.NormalizedUserName);
         }
 
-        public async Task SetNormalizedUserNameAsync(TUser user, string normalizedName, CancellationToken cancellationToken)
+        public async Task SetNormalizedUserNameAsync(TUser user, string normalizedName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -167,7 +165,7 @@ namespace Neo4jClient.AspNet.Identity
             await Task.FromResult(0);
         }
 
-        public async Task<IdentityResult> CreateAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<IdentityResult> CreateAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -181,13 +179,13 @@ namespace Neo4jClient.AspNet.Identity
             return IdentityResult.Success;
         }
 
-        public async Task<IdentityResult> UpdateAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<IdentityResult> UpdateAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
 
-            var query = new CypherFluentQuery(_graphClient)
+            var query = _graphClient.Cypher
                 .Match($"(u:{user.Labels} {{ Id: userParam.Id }})")
                 .Set("u = {userParam}")
                 .WithParam("userParam", user);
@@ -196,66 +194,93 @@ namespace Neo4jClient.AspNet.Identity
             return IdentityResult.Success;
         }
 
-        public async Task<IdentityResult> DeleteAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<IdentityResult> DeleteAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
 
             await _graphClient.Cypher
-                .Match("(u:User)")
-                .Where((TUser u) => u.Id == user.Id)
+                .Match($"(u:{user.Labels})")
+                .Where((TUser u) => u.Id.Equals(user.Id))
                 .OptionalMatch("(u)-[lr:HAS_LOGIN]->(l)")
                 .OptionalMatch("(u)-[cr:HAS_CLAIM]->(c)")
-                .Delete("u,lr,cr,l,c")
+                .OptionalMatch("(u)-[rr:HAS_CLAIM]->(r)")
+                .Delete("u,lr,cr,l,c,rr")
                 .ExecuteWithoutResultsAsync();
             return IdentityResult.Success;
         }
 
-        public async Task<TUser> FindByIdAsync(string userId, CancellationToken cancellationToken)
+        public async Task<TUser> FindByIdAsync(string userId, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(userId, "userId");
 
-            var query = new CypherFluentQuery(_graphClient)
-                .Match("(u:User)")
-                .Where((TUser u) => u.Id == userId)
-                .OptionalMatch("(u)-[lr:HAS_LOGIN]->(l:Login)")
-                .OptionalMatch("(u)-[cr:HAS_CLAIM]->(c:Claim)")
-                .Return((u, c, l) => new FindUserResult<TUser>
-                {
-                    User = u.As<TUser>(),
-                    Logins = l.CollectAs<UserLoginInfo>(),
-                    Claims = c.CollectAs<IdentityUserClaim>(),
-                });
+            var results = await _graphClient.Cypher
+                .Match($"(u:{typeof(TUser).Labels()})")
+                .Where((TUser u) => u.Id.Equals(this.ConvertIdFromString(userId)))
+                .OptionalMatch("(u)-[:HAS_LOGIN]->(l)")
+                .OptionalMatch("(u)-[:HAS_CLAIM]->(c)")
+                .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
+                .Return((u, c, l, r) =>
+                    u.As<TUser>().Fill(
+                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        c.CollectAs<IdentityClaim<TKey>>().ToList(),
+                        l.CollectAs<IdentityLogin<TKey>>().ToList()))
+                .ResultsAsync;
 
-            var user = (await query.ResultsAsync).SingleOrDefault();
-
-            return user == null ? null : user.Combine();
+            return results.SingleOrDefault();
         }
 
-        public async Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken)
+        public async Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNullOrWhiteSpace(normalizedUserName, "normalizedUserName");
 
-            var query = new CypherFluentQuery(_graphClient)
-                .Match("(u:User)")
+            var results = await _graphClient.Cypher
+                .Match($"(u:{typeof(TUser).Labels()})")
                 .Where((TUser u) => u.NormalizedUserName == normalizedUserName)
-                .OptionalMatch("(u)-[lr:HAS_LOGIN]->(l:Login})")
-                .OptionalMatch("(u)-[cr:HAS_CLAIM]->(c:Claim)")
-                .Return((u, c, l) => new FindUserResult<TUser>
-                {
-                    User = u.As<TUser>(),
-                    Logins = l.CollectAs<UserLoginInfo>(),
-                    Claims = c.CollectAs<IdentityUserClaim>(),
-                });
+                .OptionalMatch("(u)-[:HAS_LOGIN]->(l)")
+                .OptionalMatch("(u)-[:HAS_CLAIM]->(c)")
+                .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
+                .Return((u, c, l, r) =>
+                    u.As<TUser>().Fill(
+                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        c.CollectAs<IdentityClaim<TKey>>().ToList(),
+                        l.CollectAs<IdentityLogin<TKey>>().ToList()))
+                .ResultsAsync;
 
-            var results = await query.ResultsAsync;
-            var findUserResult = results.SingleOrDefault();
-            return findUserResult == null ? null : findUserResult.Combine();
+            return results.SingleOrDefault();
+        }
+
+        /// <summary>
+        /// Converts the provided <paramref name="id"/> to a strongly typed key object.
+        /// </summary>
+        /// <param name="id">The id to convert.</param>
+        /// <returns>An instance of <typeparamref name="TKey"/> representing the provided <paramref name="id"/>.</returns>
+        public virtual TKey ConvertIdFromString(string id)
+        {
+            if (id == null)
+            {
+                return default(TKey);
+            }
+            return (TKey)TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(id);
+        }
+
+        /// <summary>
+        /// Converts the provided <paramref name="id"/> to its string representation.
+        /// </summary>
+        /// <param name="id">The id to convert.</param>
+        /// <returns>An <see cref="string"/> representation of the provided <paramref name="id"/>.</returns>
+        public virtual string ConvertIdToString(TKey id)
+        {
+            if (id.Equals(default(TKey)))
+            {
+                return null;
+            }
+            return id.ToString();
         }
 
         public void Dispose()
@@ -267,24 +292,7 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserClaimStore
 
-
-        private static ICypherFluentQuery AddClaims(ICypherFluentQuery query, IList<IdentityUserClaim> claims)
-        {
-            if (claims == null || claims.Count == 0)
-                return query;
-
-            for (int i = 0; i < claims.Count; i++)
-            {
-                var claimName = string.Format("claim{0}", i);
-                var claimParam = claims[i];
-                query = query.With("u")
-                    .Create("(u)-[:HAS_CLAIM]->(c" + i + ":claim {" + claimName + "})")
-                    .WithParam(claimName, claimParam);
-            }
-            return query;
-        }
-
-        public async Task<IList<Claim>> GetClaimsAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<IList<Claim>> GetClaimsAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -293,15 +301,15 @@ namespace Neo4jClient.AspNet.Identity
             var results = await
                 this._graphClient
                 .Cypher
-                .OptionalMatch("(u:User { Id: id})-[:HAS_CLAIM]->(c:claim)")
-                .WithParam("id", user.Id)
-                .Return<Claim>("c")
+                .OptionalMatch($"(u:{user.Labels})-[:HAS_CLAIM]->(c)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .Return<IdentityClaim<TKey>>("c")
                 .ResultsAsync;
 
-            return results.ToList();
+            return results.Select(c => c.ToClaim()).ToList();
         }
 
-        public async Task AddClaimsAsync(TUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+        public async Task AddClaimsAsync(TUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -311,12 +319,13 @@ namespace Neo4jClient.AspNet.Identity
             await this._graphClient
                 .Cypher
                 .WithParam("id", user.Id)
-                .Unwind(claims, "claim")
-                .Create("(u:User { Id: id})-[:HAS_CLAIM]->(c:claim { claim })")
+                .Unwind(claims.Select(c => new IdentityClaim<TKey>(c)), "claim")
+                .Match($"(u:{user.Labels} {{ Id: id }})")
+                .Create($"(u)-[:HAS_CLAIM]->(c:{typeof(IdentityClaim).Labels()} {{ claim }})")
                 .ExecuteWithoutResultsAsync();
         }
 
-        public async Task ReplaceClaimAsync(TUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken)
+        public async Task ReplaceClaimAsync(TUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -324,18 +333,21 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(newClaim, "newClaim");
             Check.IsNull(user, "user");
 
+            var iNewClaim = new IdentityClaim<TKey>(newClaim);
+
             await this._graphClient
                 .Cypher
-                .WithParam("id", user.Id)
-                .WithParam("claim", claim)
-                .WithParam("newClaim", newClaim)
-                .Match("(u:User { Id: id })-[r:HAS_CLAIM]->(c:claim { claim })")
+                .WithParam("newClaim", iNewClaim)
+                .Match($"(u:{user.Labels})-[r:HAS_CLAIM]->(c)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .AndWhere((IdentityClaim<TKey> c) => c.ClaimType == claim.Type)
+                .AndWhere((IdentityClaim<TKey> c) => c.ClaimValue == claim.Value)
                 .Delete("c")
-                .Create("(u:User { Id: id })-[:HAS_CLAIM]->(c2:claim { newClaim })")
+                .Create($"(u)-[:HAS_CLAIM]->(c2:{iNewClaim.Labels} {{ newClaim }})")
                 .ExecuteWithoutResultsAsync();
         }
 
-        public async Task RemoveClaimsAsync(TUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+        public async Task RemoveClaimsAsync(TUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -345,22 +357,29 @@ namespace Neo4jClient.AspNet.Identity
             await this._graphClient
                 .Cypher
                 .WithParam("id", user.Id)
-                .Unwind(claims, "claim")
-                .Match("(u:User { Id: id })-[r:HAS_CLAIM]->(c:claim { claim })")
+                .Unwind(claims.Select(c => new { ClaimType = c.Type, ClaimValue = c.Value }), "claim")
+                .Match($"(u:{user.Labels} {{ Id: id }})-[:HAS_CLAIM]->(c:{typeof(IdentityClaim).Labels()} {{ claim }})")
                 .Delete("c")
                 .ExecuteWithoutResultsAsync();
         }
 
-        public async Task<IList<TUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
+        public async Task<IList<TUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(claim, "claim");
 
             var results = await _graphClient.Cypher
-                .Match("(u:User)-[:HAS_CLAIM]->(c:claim { claim })")
-                .WithParam("claim", claim)
-                .Return((u, c, l) => u).ResultsAsync;
+                .Match($"(u:{typeof(TUser).Labels()})-[:HAS_CLAIM]->(c:{typeof(IdentityClaim).Labels()})")
+                .AndWhere((IdentityClaim<TKey> c) => c.ClaimType == claim.Type)
+                .AndWhere((IdentityClaim<TKey> c) => c.ClaimValue == claim.Value)
+                .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
+                .OptionalMatch("(u)-[:HAS_LOGIN]->(l)")
+                .Return((u, c, l, r) => 
+                    u.As<TUser>().Fill(
+                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        c.CollectAs<IdentityClaim<TKey>>().ToList(),
+                        l.CollectAs<IdentityLogin<TKey>>().ToList())).ResultsAsync;
 
             return results.Cast<TUser>().ToList();
         }
@@ -369,73 +388,77 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserRoleStore
 
-        public async Task AddToRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
+        public async virtual Task AddToRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
-            Check.IsNull(roleName, "roleName");
+            Check.IsNull(normalizedRoleName, "normalizedRoleName");
 
             await this._graphClient.Cypher
-                .Merge("(u:User { Id: id })-[:HAS_ROLE]->(r:Role { Name: roleName })")
-                .WithParams(new { id = user.Id, roleName })
+                .Match($"(u:{user.Labels})", $"(r:{typeof(IdentityRole).Labels()})")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .AndWhere((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
+                .Create("(u)-[:HAS_ROLE]->(r)")
                 .ExecuteWithoutResultsAsync();
         }
 
-        public async Task RemoveFromRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
+        public async Task RemoveFromRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
-            Check.IsNull(roleName, "roleName");
+            Check.IsNull(normalizedRoleName, "normalizedRoleName");
 
             await this._graphClient.Cypher
-                .Match("(u:User { Id: id })-[h:HAS_ROLE]->(r:Role { Name: roleName })")
-                .WithParams(new { id = user.Id, roleName })
-                .Delete("h")
+                .Match($"(u:{user.Labels})-[rr:HAS_ROLE]->(r)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .AndWhere((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
+                .Delete("rr")
                 .ExecuteWithoutResultsAsync();
         }
 
-        public async Task<IList<string>> GetRolesAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<IList<string>> GetRolesAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
 
             var results = await this._graphClient.Cypher
-                .Match("(u:User { Id: id })-[:HAS_ROLE]->(r:Role)")
-                .WithParams(new { id = user.Id })
-                .Return<string>("r.Name")
+                .Match($"(u:{user.Labels})-[:HAS_ROLE]->(r)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .Return(r => r.As<IdentityRole<TKey>>().Name)
                 .ResultsAsync;
 
             return results.ToList();
         }
 
-        public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
+        public async Task<bool> IsInRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
-            Check.IsNull(roleName, "roleName");
+            Check.IsNull(normalizedRoleName, "normalizedRoleName");
 
             var results = await this._graphClient.Cypher
-                .Match("(u:User { Id: id })-[h:HAS_ROLE]->(r:Role { Name: roleName })")
-                .WithParams(new { id = user.Id, roleName })
-                .Return<string>("u.Id")
+                .Match($"(u:{user.Labels})-[:HAS_ROLE]->(r)")
+                .Where((TUser u) => u.Id.Equals(user.Id))
+                .AndWhere((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
+                .Return<int>("count(u)")
                 .ResultsAsync;
 
             return results.Any();
         }
 
-        public async Task<IList<TUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
+        public async Task<IList<TUser>> GetUsersInRoleAsync(string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            Check.IsNull(roleName, "roleName");
+            Check.IsNull(normalizedRoleName, "normalizedRoleName");
 
             var results = await this._graphClient.Cypher
-                .Match("(u:User)-[h:HAS_ROLE]->(r:Role { Name: roleName })")
-                .WithParams(new { roleName })
+                .Match($"(u:{typeof(TUser).Labels()})-[:HAS_ROLE]->(r:{typeof(IdentityRole).Labels()})")
+                .Where((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
                 .Return<TUser>("u")
                 .ResultsAsync;
 
@@ -446,7 +469,7 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserPasswordStore
 
-        public async Task SetPasswordHashAsync(TUser user, string passwordHash, CancellationToken cancellationToken)
+        public async Task SetPasswordHashAsync(TUser user, string passwordHash, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -456,7 +479,7 @@ namespace Neo4jClient.AspNet.Identity
             await Task.FromResult(0);
         }
 
-        public async Task<string> GetPasswordHashAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<string> GetPasswordHashAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -465,7 +488,7 @@ namespace Neo4jClient.AspNet.Identity
             return await Task.FromResult(user.PasswordHash);
         }
 
-        public async Task<bool> HasPasswordAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<bool> HasPasswordAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             return await Task.FromResult(user.PasswordHash != null);
@@ -475,7 +498,7 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserSecurityStampStore
 
-        public async Task SetSecurityStampAsync(TUser user, string stamp, CancellationToken cancellationToken)
+        public async Task SetSecurityStampAsync(TUser user, string stamp, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -485,7 +508,7 @@ namespace Neo4jClient.AspNet.Identity
             await Task.FromResult(0);
         }
 
-        public async Task<string> GetSecurityStampAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<string> GetSecurityStampAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -498,7 +521,7 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserEmailStore
 
-        public async Task SetEmailAsync(TUser user, string email, CancellationToken cancellationToken)
+        public async Task SetEmailAsync(TUser user, string email, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -508,7 +531,7 @@ namespace Neo4jClient.AspNet.Identity
             await Task.FromResult(0);
         }
 
-        public async Task<string> GetEmailAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<string> GetEmailAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -517,7 +540,7 @@ namespace Neo4jClient.AspNet.Identity
             return await Task.FromResult(user.Email);
         }
 
-        public async Task<bool> GetEmailConfirmedAsync(TUser user, CancellationToken cancellationToken)
+        public async Task<bool> GetEmailConfirmedAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -526,7 +549,7 @@ namespace Neo4jClient.AspNet.Identity
             return await Task.FromResult(user.EmailConfirmed);
         }
 
-        public async Task SetEmailConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken)
+        public async Task SetEmailConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -536,13 +559,13 @@ namespace Neo4jClient.AspNet.Identity
             await Task.FromResult(0);
         }
 
-        public async Task<TUser> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
+        public async Task<TUser> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
 
             var query = await this._graphClient.Cypher
-                .Match("(u:User)")
+                .Match($"(u:{typeof(TUser).Labels()})")
                 .Where((TUser u) => u.NormalizedEmail == normalizedEmail)
                 .Return(u => u.As<TUser>())
                 .ResultsAsync;
@@ -550,7 +573,7 @@ namespace Neo4jClient.AspNet.Identity
             return query.SingleOrDefault();
         }
 
-        public Task<string> GetNormalizedEmailAsync(TUser user, CancellationToken cancellationToken)
+        public Task<string> GetNormalizedEmailAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -559,7 +582,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.NormalizedEmail);
         }
 
-        public Task SetNormalizedEmailAsync(TUser user, string normalizedEmail, CancellationToken cancellationToken)
+        public Task SetNormalizedEmailAsync(TUser user, string normalizedEmail, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -573,7 +596,7 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserLockoutStore
 
-        public Task<DateTimeOffset?> GetLockoutEndDateAsync(TUser user, CancellationToken cancellationToken)
+        public Task<DateTimeOffset?> GetLockoutEndDateAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -582,7 +605,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.LockoutEnd);
         }
 
-        public Task SetLockoutEndDateAsync(TUser user, DateTimeOffset? lockoutEnd, CancellationToken cancellationToken)
+        public Task SetLockoutEndDateAsync(TUser user, DateTimeOffset? lockoutEnd, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -592,7 +615,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(0);
         }
 
-        public Task<int> IncrementAccessFailedCountAsync(TUser user, CancellationToken cancellationToken)
+        public Task<int> IncrementAccessFailedCountAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -602,7 +625,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.AccessFailedCount);
         }
 
-        public Task ResetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken)
+        public Task ResetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -612,7 +635,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(0);
         }
 
-        public Task<int> GetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken)
+        public Task<int> GetAccessFailedCountAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -621,7 +644,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.AccessFailedCount);
         }
 
-        public Task<bool> GetLockoutEnabledAsync(TUser user, CancellationToken cancellationToken)
+        public Task<bool> GetLockoutEnabledAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -630,7 +653,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.LockoutEnabled);
         }
 
-        public Task SetLockoutEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken)
+        public Task SetLockoutEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -644,7 +667,7 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserTwoFactorStore
 
-        public Task SetTwoFactorEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken)
+        public Task SetTwoFactorEnabledAsync(TUser user, bool enabled, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -654,7 +677,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(0);
         }
 
-        public Task<bool> GetTwoFactorEnabledAsync(TUser user, CancellationToken cancellationToken)
+        public Task<bool> GetTwoFactorEnabledAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -667,7 +690,7 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserPhoneNumberStore
 
-        public Task SetPhoneNumberAsync(TUser user, string phoneNumber, CancellationToken cancellationToken)
+        public Task SetPhoneNumberAsync(TUser user, string phoneNumber, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -677,7 +700,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(0);
         }
 
-        public Task<string> GetPhoneNumberAsync(TUser user, CancellationToken cancellationToken)
+        public Task<string> GetPhoneNumberAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -686,7 +709,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.PhoneNumber);
         }
 
-        public Task<bool> GetPhoneNumberConfirmedAsync(TUser user, CancellationToken cancellationToken)
+        public Task<bool> GetPhoneNumberConfirmedAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
@@ -695,7 +718,7 @@ namespace Neo4jClient.AspNet.Identity
             return Task.FromResult(user.PhoneNumberConfirmed);
         }
 
-        public Task SetPhoneNumberConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken)
+        public Task SetPhoneNumberConfirmedAsync(TUser user, bool confirmed, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
