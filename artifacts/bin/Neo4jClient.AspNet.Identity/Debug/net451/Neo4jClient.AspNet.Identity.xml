@@ -418,6 +418,11 @@
             A navigation property for the roles the store contains.
             </summary>
         </member>
+        <member name="P:Neo4jClient.AspNet.Identity.UserStore`2.ErrorDescriber">
+            <summary>
+            Gets or sets the <see cref="T:Microsoft.AspNet.Identity.IdentityErrorDescriber"/> for any error that occurred with the current operation.
+            </summary>
+        </member>
         <member name="M:Neo4jClient.AspNet.Identity.UserStore`2.AddLoginAsync(`0,Microsoft.AspNet.Identity.UserLoginInfo,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>

@@ -29,10 +29,16 @@ namespace Neo4jClient.AspNet.Identity
         private bool _disposed;
         private readonly IGraphClient _graphClient;
 
-        public UserStore(IGraphClient graphClient)
+        public UserStore(IGraphClient graphClient, IdentityErrorDescriber describer = null)
         {
             _graphClient = graphClient;
+            ErrorDescriber = describer ?? new IdentityErrorDescriber();
         }
+
+        /// <summary>
+        /// Gets or sets the <see cref="IdentityErrorDescriber"/> for any error that occurred with the current operation.
+        /// </summary>
+        public IdentityErrorDescriber ErrorDescriber { get; set; }
 
         private void ThrowIfDisposed()
         {
@@ -185,13 +191,24 @@ namespace Neo4jClient.AspNet.Identity
             ThrowIfDisposed();
             Check.IsNull(user, "user");
 
-            var query = _graphClient.Cypher
+            var results = await _graphClient.Cypher
+                .WithParam("userParam", user)
                 .Match($"(u:{user.Labels} {{ Id: userParam.Id }})")
-                .Set("u = {userParam}")
-                .WithParam("userParam", user);
+                .Where((TUser u) => u.TimeStamp == user.TimeStamp)
+                .Set("u = userParam")
+                .Set("r.TimeStamp = timestamp()")
+                .Return(u => u.As<TUser>().TimeStamp)
+                .ResultsAsync;
 
-            await query.ExecuteWithoutResultsAsync();
-            return IdentityResult.Success;
+            if (results.Any())
+            {
+                user.TimeStamp = results.First();
+                return IdentityResult.Success;
+            }
+            else
+            {
+                return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
+            }
         }
 
         public async Task<IdentityResult> DeleteAsync(TUser user, CancellationToken cancellationToken = default(CancellationToken))
@@ -200,15 +217,23 @@ namespace Neo4jClient.AspNet.Identity
             ThrowIfDisposed();
             Check.IsNull(user, "user");
 
-            await _graphClient.Cypher
+            var results = await _graphClient.Cypher
                 .Match($"(u:{user.Labels})")
                 .Where((TUser u) => u.Id.Equals(user.Id))
+                .AndWhere((TUser u) => u.TimeStamp == user.TimeStamp)
                 .OptionalMatch("(u)-[lr:HAS_LOGIN]->(l)")
                 .OptionalMatch("(u)-[cr:HAS_CLAIM]->(c)")
                 .OptionalMatch("(u)-[rr:HAS_CLAIM]->(r)")
                 .Delete("u,lr,cr,l,c,rr")
-                .ExecuteWithoutResultsAsync();
-            return IdentityResult.Success;
+                .Return<long>("count(u)")
+                .ResultsAsync;
+
+            if (results.All(r => r > 0))
+            {
+                return IdentityResult.Success;
+            }
+
+            return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
         }
 
         public async Task<TUser> FindByIdAsync(string userId, CancellationToken cancellationToken = default(CancellationToken))
