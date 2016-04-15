@@ -418,25 +418,33 @@
             A navigation property for the roles the store contains.
             </summary>
         </member>
-        <member name="P:Neo4jClient.AspNet.Identity.UserStore`2.ErrorDescriber">
+        <member name="T:Neo4jClient.AspNet.Identity.UserStore`2">
+            <summary>
+            Creates a new instance of a persistence store for the specified user and role types.
+            </summary>
+            <typeparam name="TUser">The type representing a user.</typeparam>
+            <typeparam name="TRole">The type representing a role.</typeparam>
+            <typeparam name="TContext">The type of the data context class used to access the store.</typeparam>
+        </member>
+        <member name="P:Neo4jClient.AspNet.Identity.UserStore`3.ErrorDescriber">
             <summary>
             Gets or sets the <see cref="T:Microsoft.AspNet.Identity.IdentityErrorDescriber"/> for any error that occurred with the current operation.
             </summary>
         </member>
-        <member name="M:Neo4jClient.AspNet.Identity.UserStore`2.AddLoginAsync(`0,Microsoft.AspNet.Identity.UserLoginInfo,System.Threading.CancellationToken)">
+        <member name="M:Neo4jClient.AspNet.Identity.UserStore`3.AddLoginAsync(`0,Microsoft.AspNet.Identity.UserLoginInfo,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Neo4jClient.AspNet.Identity.UserStore`2.RemoveLoginAsync(`0,System.String,System.String,System.Threading.CancellationToken)">
+        <member name="M:Neo4jClient.AspNet.Identity.UserStore`3.RemoveLoginAsync(`0,System.String,System.String,System.Threading.CancellationToken)">
             <inheritdoc />
         </member>
-        <member name="M:Neo4jClient.AspNet.Identity.UserStore`2.ConvertIdFromString(System.String)">
+        <member name="M:Neo4jClient.AspNet.Identity.UserStore`3.ConvertIdFromString(System.String)">
             <summary>
             Converts the provided <paramref name="id"/> to a strongly typed key object.
             </summary>
             <param name="id">The id to convert.</param>
             <returns>An instance of <typeparamref name="TKey"/> representing the provided <paramref name="id"/>.</returns>
         </member>
-        <member name="M:Neo4jClient.AspNet.Identity.UserStore`2.ConvertIdToString(`1)">
+        <member name="M:Neo4jClient.AspNet.Identity.UserStore`3.ConvertIdToString(`2)">
             <summary>
             Converts the provided <paramref name="id"/> to its string representation.
             </summary>

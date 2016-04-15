@@ -12,7 +12,20 @@ namespace Neo4jClient.AspNet.Identity
     using Neo4jClient;
     using Neo4jClient.Cypher;
 
-    public class UserStore<TUser, TKey> :
+    /// <summary>
+    /// Creates a new instance of a persistence store for the specified user and role types.
+    /// </summary>
+    /// <typeparam name="TUser">The type representing a user.</typeparam>
+    /// <typeparam name="TRole">The type representing a role.</typeparam>
+    /// <typeparam name="TContext">The type of the data context class used to access the store.</typeparam>
+    public class UserStore<TUser, TRole> : UserStore<TUser, TRole, string>
+        where TUser : IdentityUser<string>, new()
+        where TRole : IdentityRole<string>, new()
+    {
+        public UserStore(IGraphClient graphClient, IdentityErrorDescriber describer = null) : base(graphClient, describer) { }
+    }
+
+    public class UserStore<TUser, TRole, TKey> :
         IUserLoginStore<TUser>,
         IUserClaimStore<TUser>,
         IUserRoleStore<TUser>,
@@ -24,6 +37,7 @@ namespace Neo4jClient.AspNet.Identity
         IUserPhoneNumberStore<TUser>,
         IUserStore<TUser>
         where TKey : IEquatable<TKey>
+        where TRole : IdentityRole<TKey>
         where TUser : IdentityUser<TKey>, new()
     {
         private bool _disposed;
@@ -115,7 +129,7 @@ namespace Neo4jClient.AspNet.Identity
                 .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
                 .Return((u, c, l, r) =>
                     u.As<TUser>().Fill(
-                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        r.CollectAs<TRole>().Cast<IdentityRole<TKey>>().ToList(),
                         c.CollectAs<IdentityClaim<TKey>>().ToList(),
                         l.CollectAs<IdentityLogin<TKey>>().ToList())).ResultsAsync;
 
@@ -250,7 +264,7 @@ namespace Neo4jClient.AspNet.Identity
                 .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
                 .Return((u, c, l, r) =>
                     u.As<TUser>().Fill(
-                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        r.CollectAs<TRole>().Cast<IdentityRole<TKey>>().ToList(),
                         c.CollectAs<IdentityClaim<TKey>>().ToList(),
                         l.CollectAs<IdentityLogin<TKey>>().ToList()))
                 .ResultsAsync;
@@ -272,7 +286,7 @@ namespace Neo4jClient.AspNet.Identity
                 .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
                 .Return((u, c, l, r) =>
                     u.As<TUser>().Fill(
-                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        r.CollectAs<TRole>().Cast<IdentityRole<TKey>>().ToList(),
                         c.CollectAs<IdentityClaim<TKey>>().ToList(),
                         l.CollectAs<IdentityLogin<TKey>>().ToList()))
                 .ResultsAsync;
@@ -402,7 +416,7 @@ namespace Neo4jClient.AspNet.Identity
                 .OptionalMatch("(u)-[:HAS_LOGIN]->(l)")
                 .Return((u, c, l, r) => 
                     u.As<TUser>().Fill(
-                        r.CollectAs<IdentityRole<TKey>>().ToList(),
+                        r.CollectAs<TRole>().Cast<IdentityRole<TKey>>().ToList(),
                         c.CollectAs<IdentityClaim<TKey>>().ToList(),
                         l.CollectAs<IdentityLogin<TKey>>().ToList())).ResultsAsync;
 
@@ -421,9 +435,9 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(normalizedRoleName, "normalizedRoleName");
 
             await this._graphClient.Cypher
-                .Match($"(u:{user.Labels})", $"(r:{typeof(IdentityRole).Labels()})")
+                .Match($"(u:{user.Labels})", $"(r:{typeof(TRole).Labels()})")
                 .Where((TUser u) => u.Id.Equals(user.Id))
-                .AndWhere((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
+                .AndWhere((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Create("(u)-[:HAS_ROLE]->(r)")
                 .ExecuteWithoutResultsAsync();
         }
@@ -438,7 +452,7 @@ namespace Neo4jClient.AspNet.Identity
             await this._graphClient.Cypher
                 .Match($"(u:{user.Labels})-[rr:HAS_ROLE]->(r)")
                 .Where((TUser u) => u.Id.Equals(user.Id))
-                .AndWhere((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
+                .AndWhere((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Delete("rr")
                 .ExecuteWithoutResultsAsync();
         }
@@ -452,7 +466,7 @@ namespace Neo4jClient.AspNet.Identity
             var results = await this._graphClient.Cypher
                 .Match($"(u:{user.Labels})-[:HAS_ROLE]->(r)")
                 .Where((TUser u) => u.Id.Equals(user.Id))
-                .Return(r => r.As<IdentityRole<TKey>>().Name)
+                .Return(r => r.As<TRole>().Name)
                 .ResultsAsync;
 
             return results.ToList();
@@ -468,7 +482,7 @@ namespace Neo4jClient.AspNet.Identity
             var results = await this._graphClient.Cypher
                 .Match($"(u:{user.Labels})-[:HAS_ROLE]->(r)")
                 .Where((TUser u) => u.Id.Equals(user.Id))
-                .AndWhere((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
+                .AndWhere((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Return<int>("count(u)")
                 .ResultsAsync;
 
@@ -482,8 +496,8 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(normalizedRoleName, "normalizedRoleName");
 
             var results = await this._graphClient.Cypher
-                .Match($"(u:{typeof(TUser).Labels()})-[:HAS_ROLE]->(r:{typeof(IdentityRole).Labels()})")
-                .Where((IdentityRole<TKey> r) => r.NormalizedName == normalizedRoleName)
+                .Match($"(u:{typeof(TUser).Labels()})-[:HAS_ROLE]->(r:{typeof(TRole).Labels()})")
+                .Where((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Return<TUser>("u")
                 .ResultsAsync;
 
