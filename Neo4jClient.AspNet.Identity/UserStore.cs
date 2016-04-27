@@ -262,14 +262,17 @@ namespace Neo4jClient.AspNet.Identity
                 .OptionalMatch("(u)-[:HAS_LOGIN]->(l)")
                 .OptionalMatch("(u)-[:HAS_CLAIM]->(c)")
                 .OptionalMatch("(u)-[:HAS_ROLE]->(r)")
-                .Return((u, c, l, r) =>
-                    u.As<TUser>().Fill(
-                        r.CollectAs<TRole>().Cast<IdentityRole<TKey>>().ToList(),
-                        c.CollectAs<IdentityClaim<TKey>>().ToList(),
-                        l.CollectAs<IdentityLogin<TKey>>().ToList()))
+                .Return((u, c, l, r) => new
+                {
+                    User = u.As<TUser>(),
+                    Roles = r.CollectAs<TRole>(),
+                    Claims = c.CollectAs<IdentityClaim<TKey>>(),
+                    Logins = l.CollectAs<IdentityLogin<TKey>>()
+                })
                 .ResultsAsync;
 
-            return results.SingleOrDefault();
+            var ret = results.SingleOrDefault();
+            return ret.User.Fill(ret.Roles, ret.Claims, ret.Logins);
         }
 
         public async Task<TUser> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken = default(CancellationToken))

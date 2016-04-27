@@ -1,5 +1,5 @@
 {
-  "version": "0.1.1-alpha-*",
+  "version": "0.1.2-alpha-*",
   "description": "Neo4jClient.AspNet.Identity Class Library",
   "authors": [ "Miguel Freire" ],
   "tags": [ "" ],
@@ -9,7 +9,7 @@
     "net451": { }
   },
   "dependencies": {
-    "Microsoft.AspNet.Identity": "3.0.0-rc2-16304",
+    "Microsoft.AspNet.Identity": "3.0.0-rc1-final",
     "Neo4jClient": "1.1.0.34"
   }
 }

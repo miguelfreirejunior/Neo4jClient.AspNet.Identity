@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using Neo4jClient.AspNet.Identity.Helpers;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace Neo4jClient.AspNet.Identity
@@ -166,13 +167,13 @@ namespace Neo4jClient.AspNet.Identity
 
     public static class IdentityUserExtensions
     {
-        public static T Fill<T, TKey>(this T user, ICollection<IdentityRole<TKey>> roles, ICollection<IdentityClaim<TKey>> claims, ICollection<IdentityLogin<TKey>> logins)
+        public static T Fill<T, TKey>(this T user, IEnumerable<IdentityRole<TKey>> roles, IEnumerable<IdentityClaim<TKey>> claims, IEnumerable<IdentityLogin<TKey>> logins)
             where TKey : IEquatable<TKey>
             where T : IdentityUser<TKey>
         {
-            user.Roles = roles;
-            user.Claims = claims;
-            user.Logins = logins;
+            user.Roles = roles.ToList();
+            user.Claims = claims.ToList();
+            user.Logins = logins.ToList();
 
             return user;
         }
