@@ -29,7 +29,7 @@ namespace Neo4jClient.AspNet.Identity
         IQueryableRoleStore<TRole>,
         IRoleClaimStore<TRole>
         where TRole : IdentityRole<TKey>
-        where TKey : IEquatable<TKey>
+        where TKey : class, IEquatable<TKey>
     {
         public RoleStore(IGraphClient graphClient, IdentityErrorDescriber describer = null)
         {
@@ -58,13 +58,13 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(role, nameof(role));
 
             var results = await this._graphClient.Cypher
-                .WithParam("role", role)
                 .Create($"(r:{role.Labels} {{ role }})")
+                .WithParams(new { role })
                 .Set("r.TimeStamp = timestamp()")
                 .Return((r) => r.As<TRole>().TimeStamp)
                 .ResultsAsync;
 
-            role.TimeStamp = results.First();
+            role.TimeStamp = results.Single();
 
             return IdentityResult.Success;
         }
@@ -114,7 +114,7 @@ namespace Neo4jClient.AspNet.Identity
 
             var results = await this._graphClient.Cypher
                 .Match($"(r:{role.Labels}")
-                .Where((TRole r) => r.Id.Equals(role.Id))
+                .Where((TRole r) => r.Id == role.Id)
                 .AndWhere((TRole r) => r.TimeStamp == role.TimeStamp)
                 .OptionalMatch("(r)-[cr:HAS_CLAIM]->(c)")
                 .Delete("r,cr")
@@ -239,7 +239,7 @@ namespace Neo4jClient.AspNet.Identity
             ThrowIfDisposed();
 
             var results = await this._graphClient.Cypher
-                .Match($"(r{typeof(TRole).Labels()})")
+                .Match($"(r:{typeof(TRole).Labels()})")
                 .Where<TRole>(r => r.NormalizedName == normalizedName)
                 .Return<TRole>("r")
                 .ResultsAsync;
@@ -334,7 +334,7 @@ namespace Neo4jClient.AspNet.Identity
             this._graphClient.Cypher
                 .WithParam("claim", iClaim)
                 .Match($"(r:{role.Labels})")
-                .Where((TRole r) => r.Id.Equals(role.Id))
+                .Where((TRole r) => r.Id == role.Id)
                 .Create($"(r)-[HAS_CLAIM]->(c:{iClaim.Labels} {{ claim }})")
                 .ExecuteWithoutResults();
 
@@ -357,7 +357,7 @@ namespace Neo4jClient.AspNet.Identity
 
             this._graphClient.Cypher
                 .Match($"(r:{role.Labels})-[rel:HAS_CLAIM]->(c:{typeof(IdentityClaim).Labels()})")
-                .Where((TRole r) => r.Id.Equals(role.Id))
+                .Where((TRole r) => r.Id == role.Id)
                 .Where((TRole r) => r.TimeStamp == role.TimeStamp)
                 .AndWhere((IdentityClaim c) => c.ClaimType == claim.Type)
                 .AndWhere((IdentityClaim c) => c.ClaimValue == claim.Value)

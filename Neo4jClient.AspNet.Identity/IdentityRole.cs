@@ -41,7 +41,7 @@ namespace Neo4jClient.AspNet.Identity
     /// Represents a role in the identity system
     /// </summary>
     /// <typeparam name="TKey">The type used for the primary key for the role.</typeparam>
-    [Neo4jLabel("Claim")]
+    [Neo4jLabel("Role")]
     public class IdentityRole<TKey> : LabeledEntity<TKey> where TKey : IEquatable<TKey>
     {
         /// <summary>
