@@ -5,6 +5,11 @@ VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}") = "Neo4jClient.AspNet.Identity", "Neo4jClient.AspNet.Identity\Neo4jClient.AspNet.Identity.xproj", "{C409C120-8B21-4C14-8397-C0FAF61C050C}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0BC077ED-F789-4A50-A5E1-64B9DD257D76}"
+	ProjectSection(SolutionItems) = preProject
+		Neo4jClient.AspNet.Identity\global.json = Neo4jClient.AspNet.Identity\global.json
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

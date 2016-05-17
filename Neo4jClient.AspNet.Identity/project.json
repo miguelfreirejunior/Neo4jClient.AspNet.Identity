@@ -1,8 +1,8 @@
 {
-  "version": "0.1.3-alpha-*",
+  "version": "0.1.4-alpha",
   "description": "Neo4jClient.AspNet.Identity Class Library",
   "authors": [ "Miguel Freire" ],
-  "tags": [ "" ],
+  "tags": [ "neo4j", "asp.net", "identity" ],
   "projectUrl": "",
   "licenseUrl": "",
   "frameworks": {
@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "Microsoft.AspNet.Identity": "3.0.0-rc1-final",
-    "Neo4jClient": "1.1.0.34"
+    "Neo4jClient": "1.1.0.37"
   }
 }
