@@ -457,7 +457,7 @@ namespace Neo4jClient.AspNet.Identity
                 .Match($"(u:{user.Labels})", $"(r:{typeof(TRole).Labels()})")
                 .Where((TUser u) => u.Id == user.Id)
                 .AndWhere((TRole r) => r.Name == roleName)
-                .Create("u-[:HAS_ROLE]->r")
+                .Create("(u)-[:HAS_ROLE]->(r)")
                 .Return((u, r) => new
                 {
                     User = u.As<TUser>(),

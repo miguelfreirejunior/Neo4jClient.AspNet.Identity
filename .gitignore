@@ -45,3 +45,8 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+.vs
+artifacts
+/Neo4jClient.AspNet.Identity/project.lock.json
+/Neo4jClient.AspNet.Identity/global.json
