@@ -8,7 +8,7 @@ namespace Neo4jClient.AspNet.Identity
     using System.Threading;
     using System.Threading.Tasks;
     using Helpers;
-    using Microsoft.AspNet.Identity;
+    using Microsoft.AspNetCore.Identity;
     using Neo4jClient;
     using Neo4jClient.Cypher;
 
@@ -70,12 +70,12 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNull(user, "user");
             Check.IsNull(login, "login");
 
+            var identityLogin = new IdentityLogin(login);
             await this._graphClient.Cypher
-                .Create($"(u:{user.Labels})-[:HAS_LOGIN]->(l)")
+                .Match($"(u:{ user.Labels})")
                 .Where((TUser u) => u.Id == user.Id)
-                .AndWhere((IdentityLogin<TKey> l) => l.LoginProvider == login.LoginProvider)
-                .AndWhere((IdentityLogin<TKey> l) => l.ProviderDisplayName == login.ProviderDisplayName)
-                .AndWhere((IdentityLogin<TKey> l) => l.ProviderKey == login.ProviderKey)
+                .Create($"(u)-[:HAS_LOGIN]->(l:{identityLogin.Labels} {{ identityLogin }})")
+                .WithParam(nameof(identityLogin), identityLogin)
                 .ExecuteWithoutResultsAsync();
         }
 
@@ -371,13 +371,16 @@ namespace Neo4jClient.AspNet.Identity
             Check.IsNullOrEmpty(claims, "claims");
             Check.IsNull(user, "user");
 
-            await this._graphClient
-                .Cypher
-                .WithParam("id", user.Id)
-                .Unwind(claims.Select(c => new IdentityClaim<TKey>(c)), "claim")
-                .Match($"(u:{user.Labels} {{ Id: id }})")
-                .Create($"(u)-[:HAS_CLAIM]->(c:{typeof(IdentityClaim).Labels()} {{ claim }})")
-                .ExecuteWithoutResultsAsync();
+            foreach (var claim in claims)
+            {
+                var identityClaim = new IdentityClaim(claim);
+                await this._graphClient.Cypher
+                    .Match($"(u:{ user.Labels})")
+                    .Where((TUser u) => u.Id == user.Id)
+                    .Create($"(u)-[:HAS_CLAIM]->(c:{identityClaim.Labels} {{ identityClaim }})")
+                    .WithParam(nameof(identityClaim), identityClaim)
+                    .ExecuteWithoutResultsAsync();
+            }
         }
 
         public async Task ReplaceClaimAsync(TUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken = default(CancellationToken))
@@ -446,17 +449,17 @@ namespace Neo4jClient.AspNet.Identity
 
         #region IUserRoleStore
 
-        public async virtual Task AddToRoleAsync(TUser user, string roleName, CancellationToken cancellationToken = default(CancellationToken))
+        public async virtual Task AddToRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
-            Check.IsNull(roleName, nameof(roleName));
+            Check.IsNull(normalizedRoleName, nameof(normalizedRoleName));
 
             var results = await this._graphClient.Cypher
                 .Match($"(u:{user.Labels})", $"(r:{typeof(TRole).Labels()})")
                 .Where((TUser u) => u.Id == user.Id)
-                .AndWhere((TRole r) => r.Name == roleName)
+                .AndWhere((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Create("(u)-[:HAS_ROLE]->(r)")
                 .Return((u, r) => new
                 {
@@ -468,17 +471,17 @@ namespace Neo4jClient.AspNet.Identity
             var rar = results.Single();
         }
 
-        public async Task RemoveFromRoleAsync(TUser user, string roleName, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task RemoveFromRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
-            Check.IsNull(roleName, nameof(roleName));
+            Check.IsNull(normalizedRoleName, nameof(normalizedRoleName));
 
             await this._graphClient.Cypher
                 .Match($"(u:{user.Labels})-[rr:HAS_ROLE]->(r)")
                 .Where((TUser u) => u.Id == user.Id)
-                .AndWhere((TRole r) => r.Name == roleName)
+                .AndWhere((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Delete("rr")
                 .ExecuteWithoutResultsAsync();
         }
@@ -498,32 +501,32 @@ namespace Neo4jClient.AspNet.Identity
             return results.ToList();
         }
 
-        public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<bool> IsInRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
             Check.IsNull(user, "user");
-            Check.IsNull(roleName, nameof(roleName));
+            Check.IsNull(normalizedRoleName, nameof(normalizedRoleName));
 
             var results = await this._graphClient.Cypher
                 .Match($"(u:{user.Labels})-[:HAS_ROLE]->(r)")
                 .Where((TUser u) => u.Id == user.Id)
-                .AndWhere((TRole r) => r.Name == roleName)
+                .AndWhere((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Return<int>("count(u)")
                 .ResultsAsync;
 
             return results.Single() > 0;
         }
 
-        public async Task<IList<TUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken = default(CancellationToken))
+        public async Task<IList<TUser>> GetUsersInRoleAsync(string normalizedRoleName, CancellationToken cancellationToken = default(CancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
             ThrowIfDisposed();
-            Check.IsNull(roleName, nameof(roleName));
+            Check.IsNull(normalizedRoleName, nameof(normalizedRoleName));
 
             var results = await this._graphClient.Cypher
                 .Match($"(u:{typeof(TUser).Labels()})-[:HAS_ROLE]->(r:{typeof(TRole).Labels()})")
-                .Where((TRole r) => r.Name == roleName)
+                .Where((TRole r) => r.NormalizedName == normalizedRoleName)
                 .Return<TUser>("u")
                 .ResultsAsync;
 
