@@ -5,7 +5,7 @@ using System.Reflection;
 namespace Neo4jClient.AspNet.Identity.Helpers
 {
     [System.AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = true)]
-    sealed class Neo4jLabelAttribute : Attribute
+    internal sealed class Neo4jLabelAttribute : Attribute
     {
         /// <summary>
         /// Auxiliar method to access the Neo4j Labels per class
