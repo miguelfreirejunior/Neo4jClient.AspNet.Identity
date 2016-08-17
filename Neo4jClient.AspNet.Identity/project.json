@@ -1,12 +1,17 @@
 {
-  "version": "0.1.6-alpha",
+  "version": "0.1.8-alpha",
   "description": "Neo4jClient.AspNet.Identity Class Library",
   "authors": [ "Miguel Freire" ],
-  "frameworks": {
-    "net451": {}
-  },
   "dependencies": {
-    "Microsoft.AspNetCore.Identity": "1.0.0-rc2-final",
-    "Neo4jClient": "1.1.0.37"
+    "NETStandard.Library": "1.6.0",
+    "Microsoft.AspNetCore.Identity": "1.0.0",
+    "Neo4jClient": "2.0.0"
+  },
+
+  "frameworks": {
+    "netstandard1.6": {
+      "imports": "dnxcore50"
+    },
+    "net451": {}
   }
 }

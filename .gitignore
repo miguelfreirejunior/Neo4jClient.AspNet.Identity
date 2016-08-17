@@ -50,3 +50,5 @@ Temporary Items
 artifacts
 /Neo4jClient.AspNet.Identity/project.lock.json
 /Neo4jClient.AspNet.Identity/global.json
+/**/bin
+/**/obj
