@@ -16,7 +16,7 @@ namespace Neo4jClient.AspNet.Identity.Helpers
             where TKey : IEquatable<TKey>
             where T : LabeledEntity<TKey>, new()
         {
-            var labels = typeof(T).GetCustomAttributes(typeof(Neo4jLabelAttribute), true).Cast<Neo4jLabelAttribute>();
+            var labels = typeof(T).GetTypeInfo().GetCustomAttributes(typeof(Neo4jLabelAttribute), true).Cast<Neo4jLabelAttribute>();
 
             return string.Join(":", labels.Select(l => l.Label));
         }

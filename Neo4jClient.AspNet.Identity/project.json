@@ -5,7 +5,8 @@
   "dependencies": {
     "NETStandard.Library": "1.6.0",
     "Microsoft.AspNetCore.Identity": "1.0.0",
-    "Neo4jClient": "2.0.0"
+    "Neo4jClient": "2.0.0",
+    "System.Linq.Queryable": "4.0.1"
   },
 
   "frameworks": {
